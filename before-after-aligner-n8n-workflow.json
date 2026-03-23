@@ -1,0 +1,153 @@
+{
+  "name": "Before After Face Alignment API (No Orphans)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "before-after-align",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "89bf6b74-432e-4680-b974-edc049c577bf",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [3200, 300],
+      "webhookId": "7da75d0b-4745-49e5-86ee-a6c88c8bdc5c"
+    },
+    {
+      "parameters": {
+        "jsCode": "const binary = $input.first().binary || {};\nconst keys = Object.keys(binary);\n\nif (keys.length < 2) {\n  throw new Error('Please send two images as multipart/form-data. Preferred field names: before and after');\n}\n\nconst beforeKey = keys.find(k => ['before','beforeImage','imageA','file1'].includes(k)) || keys[0];\nconst afterKey  = keys.find(k => ['after','afterImage','imageB','file2'].includes(k) && k !== beforeKey) || keys[1];\n\nif (!beforeKey || !afterKey) throw new Error('Could not identify before/after files');\n\nreturn [{ json: { beforeKey, afterKey }, binary: $input.first().binary }];"
+      },
+      "id": "0c2c5463-24af-435d-9432-f2f118357c0e",
+      "name": "Identify Keys",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3480, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://face-aligner:8000/align",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "before",
+              "inputDataFieldName": "={{ $json.beforeKey }}"
+            },
+            {
+              "parameterType": "formBinaryData",
+              "name": "after",
+              "inputDataFieldName": "={{ $json.afterKey }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "d4cb92a8-f3eb-4f5d-9e34-da2e7eb4d05d",
+      "name": "POST Align",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3760, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const r = $input.first().json;\nconst base = 'http://face-aligner:8000';\nreturn [\n  { json: { label: 'aligned_before', url: base + r.before_url  } },\n  { json: { label: 'aligned_after',  url: base + r.after_url   } },\n  { json: { label: 'overlay',        url: base + r.overlay_url } }\n];"
+      },
+      "id": "e1f2a3b4-0001-0001-0001-000000000001",
+      "name": "Expand URLs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4040, 300]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "image"
+            }
+          }
+        }
+      },
+      "id": "e1f2a3b4-0001-0001-0001-000000000002",
+      "name": "Download Image",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [4320, 300]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const JSZip = require('jszip');\nconst items = $input.all();\nconst zip = new JSZip();\n\nfor (const item of items) {\n  const label = item.json.label;\n  const bData = item.binary?.image?.data;\n  if (!bData) throw new Error(`No binary data for ${label}`);\n  zip.file(label + '.png', Buffer.from(bData, 'base64'));\n}\n\nconst zipBuf = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });\nconst zipBinary = await this.helpers.prepareBinaryData(zipBuf, 'before-after-aligned.zip', 'application/zip');\n\nreturn [{ json: {}, binary: { data: zipBinary } }];"
+      },
+      "id": "e1f2a3b4-0001-0001-0001-000000000003",
+      "name": "Build ZIP",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [4600, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "binary",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/zip"
+              },
+              {
+                "name": "Content-Disposition",
+                "value": "attachment; filename=\"before-after-aligned.zip\""
+              }
+            ]
+          }
+        }
+      },
+      "id": "aba61a45-6519-48b9-ab98-7ca0f3e9cd9a",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [4880, 300]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [[{"node": "Identify Keys", "type": "main", "index": 0}]]
+    },
+    "Identify Keys": {
+      "main": [[{"node": "POST Align", "type": "main", "index": 0}]]
+    },
+    "POST Align": {
+      "main": [[{"node": "Expand URLs", "type": "main", "index": 0}]]
+    },
+    "Expand URLs": {
+      "main": [[{"node": "Download Image", "type": "main", "index": 0}]]
+    },
+    "Download Image": {
+      "main": [[{"node": "Build ZIP", "type": "main", "index": 0}]]
+    },
+    "Build ZIP": {
+      "main": [[{"node": "Respond", "type": "main", "index": 0}]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "d49760ad-f0e0-4b94-8895-60ee17419052",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "b188ebd1c5df61637dcb3cfeab8f636a2201993c8bafc3643833a9afd19b2864"
+  },
+  "id": "c10VqDZx9vIajfiU",
+  "tags": []
+}
