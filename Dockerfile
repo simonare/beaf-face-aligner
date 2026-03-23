@@ -15,9 +15,10 @@ RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 # ── Runtime stage ─────────────────────────────────────────────────────────
 FROM python:3.12-slim
 
-# Runtime shared libraries
+# Runtime shared libraries (libgles2 + libegl1 required by mediapipe tasks API)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 libglib2.0-0 libgomp1 \
+    libgles2 libegl1 \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy installed packages from builder

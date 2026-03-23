@@ -17,7 +17,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const binary = $input.first().binary || {};\nconst keys = Object.keys(binary);\n\nif (keys.length < 2) {\n  throw new Error('Please send two images as multipart/form-data. Preferred field names: before and after');\n}\n\nconst beforeKey = keys.find(k => ['before','beforeImage','imageA','file1'].includes(k)) || keys[0];\nconst afterKey  = keys.find(k => ['after','afterImage','imageB','file2'].includes(k) && k !== beforeKey) || keys[1];\n\nif (!beforeKey || !afterKey) throw new Error('Could not identify before/after files');\n\nreturn [{ json: { beforeKey, afterKey }, binary: $input.first().binary }];"
+        "jsCode": "const item = $input.first();\nconst binary = item.binary || {};\nconst keys = Object.keys(binary);\n\nif (keys.length < 2) {\n  throw new Error('Please send two images as multipart/form-data. Preferred field names: before and after');\n}\n\nconst beforeKey = keys.find(k => ['before','beforeImage','imageA','file1'].includes(k)) || keys[0];\nconst afterKey  = keys.find(k => ['after','afterImage','imageB','file2'].includes(k) && k !== beforeKey) || keys[1];\n\nif (!beforeKey || !afterKey) throw new Error('Could not identify before/after files');\n\n// Optional resize / format params forwarded from the incoming form body\nconst resize_w      = item.json?.resize_w      ?? 0;\nconst resize_h      = item.json?.resize_h      ?? 0;\nconst output_format = item.json?.output_format  ?? '';\n\nreturn [{ json: { beforeKey, afterKey, resize_w, resize_h, output_format }, binary: item.binary }];"
       },
       "id": "0c2c5463-24af-435d-9432-f2f118357c0e",
       "name": "Identify Keys",
@@ -42,6 +42,21 @@
               "parameterType": "formBinaryData",
               "name": "after",
               "inputDataFieldName": "={{ $json.afterKey }}"
+            },
+            {
+              "parameterType": "formData",
+              "name": "resize_w",
+              "value": "={{ $json.resize_w }}"
+            },
+            {
+              "parameterType": "formData",
+              "name": "resize_h",
+              "value": "={{ $json.resize_h }}"
+            },
+            {
+              "parameterType": "formData",
+              "name": "output_format",
+              "value": "={{ $json.output_format }}"
             }
           ]
         },
@@ -55,7 +70,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const r = $input.first().json;\nconst base = 'http://face-aligner:8000';\nreturn [\n  { json: { label: 'aligned_before', url: base + r.before_url  } },\n  { json: { label: 'aligned_after',  url: base + r.after_url   } },\n  { json: { label: 'overlay',        url: base + r.overlay_url } }\n];"
+        "jsCode": "const r = $input.first().json;\nconst base = 'http://face-aligner:8000';\nconst fname = u => u.split('/').pop(); // extract filename from URL path\nreturn [\n  { json: { label: 'aligned_before', filename: fname(r.before_url),  url: base + r.before_url  } },\n  { json: { label: 'aligned_after',  filename: fname(r.after_url),   url: base + r.after_url   } },\n  { json: { label: 'overlay',        filename: fname(r.overlay_url), url: base + r.overlay_url } }\n];"
       },
       "id": "e1f2a3b4-0001-0001-0001-000000000001",
       "name": "Expand URLs",
@@ -84,7 +99,7 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const JSZip = require('jszip');\nconst items = $input.all();\nconst zip = new JSZip();\n\nfor (const item of items) {\n  const label = item.json.label;\n  const bData = item.binary?.image?.data;\n  if (!bData) throw new Error(`No binary data for ${label}`);\n  zip.file(label + '.png', Buffer.from(bData, 'base64'));\n}\n\nconst zipBuf = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });\nconst zipBinary = await this.helpers.prepareBinaryData(zipBuf, 'before-after-aligned.zip', 'application/zip');\n\nreturn [{ json: {}, binary: { data: zipBinary } }];"
+        "jsCode": "const JSZip = require('jszip');\nconst items = $input.all();\nconst zip = new JSZip();\n\nfor (const item of items) {\n  const filename = item.json.filename; // real filename incl. extension from API\n  const bData = item.binary?.image?.data;\n  if (!bData) throw new Error(`No binary data for ${filename}`);\n  zip.file(filename, Buffer.from(bData, 'base64'));\n}\n\nconst zipBuf = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });\nconst zipBinary = await this.helpers.prepareBinaryData(zipBuf, 'before-after-aligned.zip', 'application/zip');\n\nreturn [{ json: {}, binary: { data: zipBinary } }];"
       },
       "id": "e1f2a3b4-0001-0001-0001-000000000003",
       "name": "Build ZIP",
