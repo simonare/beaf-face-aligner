@@ -1,0 +1,5 @@
+# Sample input images are intentionally not committed.
+# Drop your before.png / after.png here for local testing.
+*
+!.gitignore
+!.gitkeep

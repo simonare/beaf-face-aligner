@@ -1,0 +1,9 @@
+tmp/
+__pycache__/
+*.py[cod]
+aligned_before.png
+aligned_after.png
+overlay.png
+meta.json
+face_landmarker.task
+.venv/

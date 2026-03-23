@@ -1,0 +1,88 @@
+services:           # version: "3.7" kaldırıldı (obsolete)
+  caddy:
+    image: caddy:latest
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy_data:/data
+      - ${DATA_FOLDER}/caddy_config:/config
+      - ${DATA_FOLDER}/caddy_config/Caddyfile:/etc/caddy/Caddyfile
+    depends_on:
+      - n8n
+
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    restart: always
+    ports:
+      - 5678:5678
+    environment:
+      - N8N_HOST=${SUBDOMAIN}.${DOMAIN_NAME}
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=https
+      - NODE_ENV=production
+      - WEBHOOK_URL=https://${SUBDOMAIN}.${DOMAIN_NAME}/
+      - GENERIC_TIMEZONE=${GENERIC_TIMEZONE}
+      - NODE_FUNCTION_ALLOW_BUILTIN=*
+      - NODE_FUNCTION_ALLOW_EXTERNAL=*
+      - NODES_EXCLUDE="[]"
+      # ── Proxy fix (Cloudflare + Caddy = 2 hop) ──
+      - N8N_PROXY_HOPS=2
+      # ── Python Task Runner (external mode) ──
+      - N8N_RUNNERS_MODE=external
+      - N8N_RUNNERS_BROKER_LISTEN_ADDRESS=0.0.0.0
+      - N8N_RUNNERS_AUTH_TOKEN=${RUNNERS_AUTH_TOKEN}
+      - N8N_NATIVE_PYTHON_RUNNER=true
+      # ── Storage migration ──
+      - N8N_MIGRATE_FS_STORAGE_PATH=true
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ${DATA_FOLDER}/local_files:/files
+
+  # ── Python Task Runner Sidecar ──────────────────────
+  n8n-runners:
+    build:
+      context: .
+      dockerfile: Dockerfile.runners
+    restart: always
+    environment:
+      - N8N_RUNNERS_TASK_BROKER_URI=http://n8n:5679
+      - N8N_RUNNERS_AUTH_TOKEN=${RUNNERS_AUTH_TOKEN}
+      - N8N_RUNNERS_MAX_CONCURRENCY=5
+      - GENERIC_TIMEZONE=${GENERIC_TIMEZONE}
+    depends_on:
+      - n8n
+    volumes:
+      - ${DATA_FOLDER}/local_files:/files
+
+  # ── Face Aligner Service ─────────────────────────────
+  # n8n'den HTTP Request node ile çağır: http://face-aligner:8000/align
+  face-aligner:
+    build:
+      context: ${DATA_FOLDER}/face-aligner   # repo'nun klonlandığı path
+      dockerfile: Dockerfile
+    container_name: face-aligner
+    restart: unless-stopped
+    # Dışarıya port açmıyoruz — n8n internal network üzerinden erişir.
+    # Host'tan test etmek istersen aşağıdaki iki satırı aç:
+    # ports:
+    #   - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      - n8n
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  caddy_data:
+    external: true
+  n8n_data:
+    external: true
+
