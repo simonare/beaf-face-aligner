@@ -27,6 +27,8 @@ services:           # version: "3.7" kaldırıldı (obsolete)
     #   - "8000:8000"
     environment:
       - PYTHONUNBUFFERED=1
+    volumes:
+      - face_aligner_results:/tmp/face_aligner
     depends_on:
       - n8n
     healthcheck:
@@ -37,8 +39,26 @@ services:           # version: "3.7" kaldırıldı (obsolete)
       retries: 3
       start_period: 30s
 
+  # ── Cleanup sidecar ──────────────────────────────────
+  # Günde bir kez face-aligner sonuçlarını temizler (2 günden eski dosyalar).
+  face-aligner-cleanup:
+    image: busybox:latest
+    restart: unless-stopped
+    volumes:
+      - face_aligner_results:/tmp/face_aligner
+    # Her gün gece 03:00'da çalışır; find ile 2 günden eski klasörleri siler.
+    entrypoint: >
+      sh -c 'while true; do
+        sleep $$(( $(date -d "tomorrow 03:00" +%s 2>/dev/null || echo 86400) - $(date +%s) ));
+        echo "[cleanup] Removing job dirs older than 2 days…";
+        find /tmp/face_aligner -mindepth 1 -maxdepth 1 -type d -mtime +1 -exec rm -rf {} +;
+        echo "[cleanup] Done.";
+      done'
+
 volumes:
   caddy_data:
     external: true
+  face_aligner_results:
+    driver: local
 
 

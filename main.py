@@ -37,7 +37,6 @@ from __future__ import annotations
 import io
 import re
 import uuid
-import tempfile
 from pathlib import Path
 from typing import Optional
 
@@ -50,8 +49,8 @@ from aligner import align_images, ensure_model
 # ── App setup ──────────────────────────────────────────────────────────────
 app = FastAPI(title="Face Aligner", version="1.0.0")
 
-# Results are written to a temp directory that lives for the container's life.
-RESULT_DIR = Path(tempfile.mkdtemp(prefix="face_aligner_"))
+RESULT_DIR = Path("/tmp/face_aligner")
+RESULT_DIR.mkdir(parents=True, exist_ok=True)
 
 _FMT_MAP = {
     ".jpg":  ("JPEG", "image/jpeg"),

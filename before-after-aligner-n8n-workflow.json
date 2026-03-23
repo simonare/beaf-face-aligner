@@ -99,13 +99,26 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const JSZip = require('jszip');\nconst items = $input.all();\nconst zip = new JSZip();\n\nfor (const item of items) {\n  const filename = item.json.filename; // real filename incl. extension from API\n  const bData = item.binary?.image?.data;\n  if (!bData) throw new Error(`No binary data for ${filename}`);\n  zip.file(filename, Buffer.from(bData, 'base64'));\n}\n\nconst zipBuf = await zip.generateAsync({ type: 'nodebuffer', compression: 'DEFLATE' });\nconst zipBinary = await this.helpers.prepareBinaryData(zipBuf, 'before-after-aligned.zip', 'application/zip');\n\nreturn [{ json: {}, binary: { data: zipBinary } }];"
+        "jsCode": "const items = $input.all();\nconst binary = {};\nfor (const item of items) {\n  const fn = item.json.filename;\n  if (!item.binary?.image) throw new Error(`No binary data for ${fn}`);\n  binary[fn] = { ...item.binary.image, fileName: fn };\n}\nreturn [{ json: {}, binary }];"
       },
       "id": "e1f2a3b4-0001-0001-0001-000000000003",
-      "name": "Build ZIP",
+      "name": "Collect Images",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [4600, 300]
+    },
+    {
+      "parameters": {
+        "operation": "compress",
+        "fileName": "before-after-aligned.zip",
+        "outputFormat": "zip",
+        "binaryPropertyName": "={{ Object.keys($binary).join(',') }}"
+      },
+      "id": "e1f2a3b4-0001-0001-0001-000000000004",
+      "name": "Compress",
+      "type": "n8n-nodes-base.compression",
+      "typeVersion": 1.1,
+      "position": [4880, 300]
     },
     {
       "parameters": {
@@ -129,7 +142,7 @@
       "name": "Respond",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
-      "position": [4880, 300]
+      "position": [5160, 300]
     }
   ],
   "pinData": {},
@@ -147,9 +160,12 @@
       "main": [[{"node": "Download Image", "type": "main", "index": 0}]]
     },
     "Download Image": {
-      "main": [[{"node": "Build ZIP", "type": "main", "index": 0}]]
+      "main": [[{"node": "Collect Images", "type": "main", "index": 0}]]
     },
-    "Build ZIP": {
+    "Collect Images": {
+      "main": [[{"node": "Compress", "type": "main", "index": 0}]]
+    },
+    "Compress": {
       "main": [[{"node": "Respond", "type": "main", "index": 0}]]
     }
   },

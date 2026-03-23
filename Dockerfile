@@ -37,9 +37,6 @@ RUN if [ "$SKIP_MODEL_DOWNLOAD" = "0" ]; then \
     python -c "from aligner import ensure_model; ensure_model(); print('Model ready.')"; \
     fi
 
-# Results are ephemeral — mount a volume here if persistence is needed
-VOLUME ["/tmp/face_aligner"]
-
 EXPOSE 8000
 
 # Adjust workers / timeout to taste; 1 worker is fine for n8n usage
